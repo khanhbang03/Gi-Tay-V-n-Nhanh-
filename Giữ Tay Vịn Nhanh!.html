@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Giữ Tay Vịn Nhanh! — Mini Game</title>
+  <style>
+    :root{
+      --bus-yellow:#ffd54f; /* nền xe buýt vàng */
+      --accent:#ff7043;
+      --pole:#9e7d3a;
+      --bg:#fff3d7;
+      --text:#2b2b2b;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+    body{display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--bg),#fff);color:var(--text)}
+    .wrap{width:100%;max-width:900px;padding:18px}
+
+    .game-area{background:var(--bus-yellow);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.15);overflow:hidden;position:relative;padding:20px}
+
+    /* bus interior */
+    .bus-stage{height:360px;position:relative;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+    .floor{height:80px;background:linear-gradient(180deg,#f4e0a8,#e7c86a);width:100%;position:absolute;left:0;bottom:0}
+    .seat-row{position:absolute;left:0;right:0;bottom:88px;height:80px;display:flex;align-items:center;justify-content:space-around}
+    .seat{width:80px;height:60px;border-radius:8px;background:#f7a27b;display:flex;align-items:center;justify-content:center;font-size:34px;box-shadow:inset 0 -6px 0 rgba(0,0,0,0.06)}
+
+    /* poles */
+    .pole{position:absolute;bottom:0;width:18px;background:linear-gradient(#b8873a,#7a4f20);height:260px;left:18%}
+    .pole.p2{left:38%}
+    .pole.p3{left:62%}
+    .pole.p4{left:82%}
+
+    .player{position:absolute;bottom:120px;font-size:60px;transform-origin:center center;transition:transform 120ms linear}
+    .player.holding{transform:translateY(-6px) scale(0.98)}
+
+    /* warning */
+    .warning{position:absolute;top:18px;left:50%;transform:translateX(-50%);background:var(--accent);color:white;padding:8px 14px;border-radius:20px;font-weight:700;display:flex;gap:10px;align-items:center;box-shadow:0 6px 18px rgba(0,0,0,0.12);opacity:0;transition:opacity 160ms}
+    .warning.show{opacity:1}
+
+    /* HUD */
+    .hud{display:flex;align-items:center;justify-content:space-between;padding:8px 6px}
+    .hud .left{font-weight:700}
+    .lives{display:flex;gap:6px;align-items:center}
+    .heart{font-size:20px}
+
+    .controls{margin-top:14px;display:flex;align-items:center;gap:12px}
+    .btn{background:white;border-radius:8px;padding:10px 14px;font-weight:700;border:0;cursor:pointer;box-shadow:0 6px 12px rgba(0,0,0,0.08)}
+
+    .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;font-weight:800;font-size:20px;gap:12px}
+
+    .score{font-size:18px}
+
+    .footer{margin-top:12px;color:#6b6b6b;font-size:13px}
+
+    /* small responsive */
+    @media (max-width:520px){
+      .player{font-size:48px}
+      .seat{width:54px;height:44px;font-size:26px}
+      .bus-stage{height:300px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="game-area" id="gameArea">
+
+      <div class="warning" id="warning"><span>🚨 PHANH GẤP!</span></div>
+
+      <div class="bus-stage" id="stage">
+        <div class="pole p1 pole-col" data-x="18%"></div>
+        <div class="pole p2 pole-col" data-x="38%"></div>
+        <div class="pole p3 pole-col" data-x="62%"></div>
+        <div class="pole p4 pole-col" data-x="82%"></div>
+
+        <div class="seat-row">
+          <div class="seat">👩</div>
+          <div class="seat">👨</div>
+          <div class="seat">🧒</div>
+          <div class="seat">🧑‍🦰</div>
+        </div>
+
+        <div class="player" id="player">😃</div>
+        <div class="floor"></div>
+      </div>
+
+      <div class="hud">
+        <div class="left">Giữ Tay Vịn Nhanh!</div>
+        <div class="right">
+          <div class="lives" id="lives"> <span class="heart">❤️</span><span class="heart">❤️</span><span class="heart">❤️</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="startBtn">Bắt đầu</button>
+        <button class="btn" id="holdBtn">Giữ (hoặc bấm Space)</button>
+        <div class="score" id="score">Score: 0</div>
+      </div>
+
+      <div class="overlay" id="overlay" style="display:flex;">
+        <div style="font-size:28px">📢 Hướng dẫn</div>
+        <div>Nhấn <strong>Space</strong> hoặc chạm nút <strong>Giữ</strong> ngay khi xuất hiện <strong>PHANH GẤP!</strong></div>
+        <button class="btn" id="overlayStart">Chơi ngay</button>
+      </div>
+
+    </div>
+    <div class="footer">Trò chơi nhỏ: phản xạ nhanh giúp tránh va chạm khi đi xe buýt.</div>
+  </div>
+
+  <script>
+  // --- Simple mini-game logic ---
+  const startBtn = document.getElementById('startBtn')
+  const holdBtn = document.getElementById('holdBtn')
+  const overlay = document.getElementById('overlay')
+  const warning = document.getElementById('warning')
+  const player = document.getElementById('player')
+  const livesEl = document.getElementById('lives')
+  const scoreEl = document.getElementById('score')
+  const stage = document.getElementById('stage')
+
+  let lives = 3
+  let score = 0
+  let gameRunning = false
+  let currentTimeout = null
+  let waitingForHold = false
+  let reactionWindow = 850 // ms to press after warning
+  let nextEventMin = 1400
+  let nextEventMax = 3200
+  let audioCtx = null
+
+  function resetGame(){
+    lives = 3; score = 0; updateHUD(); overlay.style.display='flex'; gameRunning=false; hideWarning(); player.classList.remove('holding')
+  }
+
+  function updateHUD(){
+    livesEl.innerHTML = Array.from({length:lives}).map(()=>'<span class="heart">❤️</span>').join('')
+    scoreEl.textContent = `Score: ${score}`
+  }
+
+  function startGame(){
+    updateHUD(); overlay.style.display='none'; gameRunning=true; scheduleNextEvent(800)
+  }
+
+  function scheduleNextEvent(delay){
+    clearTimeout(currentTimeout)
+    currentTimeout = setTimeout(()=>triggerWarning(), delay + randBetween(0,600))
+  }
+
+  function triggerWarning(){
+    if(!gameRunning) return
+    showWarning()
+    playSound('screech')
+    waitingForHold = true
+    // visual hint: bus jolts a bit
+    stage.animate([{transform:'translateY(0px)'},{transform:'translateY(-6px)'},{transform:'translateY(0)'}],{duration:300,easing:'ease-out'})
+
+    const reacted = {done:false}
+    const winTimeout = setTimeout(()=>{
+      if(!reacted.done){
+        // player failed
+        waitingForHold=false
+        registerFail()
+      }
+    }, reactionWindow)
+
+    // if player holds within reactionWindow, handled in handleHold()
+  }
+
+  function handleHold(){
+    if(!gameRunning) return
+    if(waitingForHold){
+      waitingForHold = false
+      hideWarning()
+      score += 1
+      updateHUD()
+      playSound('ding')
+      // success animation
+      player.classList.add('holding')
+      setTimeout(()=>player.classList.remove('holding'),250)
+      scheduleNextEvent(randBetween(nextEventMin,nextEventMax))
+    } else {
+      // Holding when not needed — small penalty? we ignore to keep game friendly
+    }
+  }
+
+  function registerFail(){
+    // animate fall
+    hideWarning()
+    playSound('boing')
+    lives -= 1
+    updateHUD()
+    // fall animation
+    player.animate([{transform:'translateY(0) rotate(0deg)'},{transform:'translateY(20px) rotate(20deg)'},{transform:'translateY(0) rotate(0deg)'}],{duration:700,easing:'cubic-bezier(.2,.9,.4,1)'})
+    if(lives <= 0){
+      endGame()
+    } else {
+      scheduleNextEvent(900)
+    }
+  }
+
+  function endGame(){
+    clearTimeout(currentTimeout)
+    gameRunning=false
+    setTimeout(()=>{
+      overlay.style.display='flex'
+      overlay.innerHTML = `<div style=\"font-size:28px\">Kết thúc</div><div>Bạn được ${score} điểm</div><button class='btn' id='replay'>Chơi lại</button>`
+      document.getElementById('replay').addEventListener('click',()=>{
+        overlay.innerHTML = ''
+        overlay.style.display='none'
+        // restore original overlay content
+        overlay.innerHTML = `\n        <div style=\"font-size:28px\">📢 Hướng dẫn</div>\n        <div>Nhấn <strong>Space</strong> hoặc chạm nút <strong>Giữ</strong> ngay khi xuất hiện <strong>PHANH GẤP!</strong></div>\n        <button class=\"btn\" id=\"overlayStart\">Chơi ngay</button>\n      `
+        attachOverlayStart()
+        resetGame(); startGame()
+      })
+    },500)
+  }
+
+  function showWarning(){warning.classList.add('show')}
+  function hideWarning(){warning.classList.remove('show')}
+
+  function randBetween(a,b){return Math.floor(a + Math.random()*(b-a))}
+
+  // --- simple audio with WebAudio API ---
+  function ensureAudio(){if(!audioCtx){audioCtx = new (window.AudioContext||window.webkitAudioContext)()}}
+
+  function playSound(name){
+    ensureAudio()
+    const ctx = audioCtx
+    if(name==='ding'){
+      const o = ctx.createOscillator(); const g = ctx.createGain(); o.type='sine'; o.frequency.value=880; g.gain.value=0; o.connect(g); g.connect(ctx.destination);
+      const t = ctx.currentTime; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.12,t+0.01); o.start(t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.25); o.stop(t+0.26);
+    } else if(name==='boing'){
+      const o = ctx.createOscillator(); const g = ctx.createGain(); o.type='square'; o.frequency.value=220; o.connect(g); g.connect(ctx.destination); g.gain.value=0.09; const t = ctx.currentTime; o.start(); g.gain.setValueAtTime(0.09,t); o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(110,t+0.35); g.gain.exponentialRampToValueAtTime(0.0001,t+0.4); o.stop(t+0.45);
+    } else if(name==='screech'){
+      const o = ctx.createOscillator(); const f = ctx.createBiquadFilter(); const g = ctx.createGain(); o.type='sawtooth'; o.frequency.value=1200; f.type='highpass'; f.frequency.value=900; o.connect(f); f.connect(g); g.connect(ctx.destination); const t=ctx.currentTime; g.gain.setValueAtTime(0.0,t); g.gain.linearRampToValueAtTime(0.12,t+0.02); o.start(t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.28); o.stop(t+0.3)
+    }
+  }
+
+  // --- input handlers ---
+  document.addEventListener('keydown', (e)=>{
+    if(e.code === 'Space'){
+      e.preventDefault(); handleHold()
+    }
+    if(e.key === 'Enter' && !gameRunning){ startGame() }
+  })
+
+  holdBtn.addEventListener('mousedown', ()=>{handleHold()})
+  holdBtn.addEventListener('touchstart', (e)=>{e.preventDefault(); handleHold()},{passive:false})
+
+  startBtn.addEventListener('click', ()=>{
+    if(!gameRunning){ resetGame(); startGame() }
+  })
+
+  function attachOverlayStart(){ const btn = document.getElementById('overlayStart'); if(btn) btn.addEventListener('click', ()=>{ resetGame(); startGame() }) }
+  attachOverlayStart()
+
+  // init position of player
+  function placePlayer(){
+    const stageRect = stage.getBoundingClientRect();
+    player.style.left = `50%`; player.style.transform = 'translateX(-50%)'
+  }
+  placePlayer()
+  window.addEventListener('resize', placePlayer)
+
+  // start paused
+  resetGame()
+  </script>
+</body>
+</html>
